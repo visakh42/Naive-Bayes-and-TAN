@@ -54,10 +54,12 @@ def calculate_probs(train_data,attr_names,attr_vals):
     return prob_of_feature_value_given_class,prob_of_class
                 
         
-def predict(test_data,prob_of_feature_value_given_class,prob_of_class,attr_names,attr_vals):
-    predictions = ""
-    predict = {} 
+def predict(test_data,prob_of_feature_value_given_class,prob_of_class,attr_names,attr_vals,train_data):
+    predictions = "***** Naive Bayes Predcitions ******* \n S.No  prediction  Actual  Probability"
+    predict = {}
+    global naive_accuracy
     count = 0
+    total = 0
     predict_feature_set_given_class = {}
     for i in range(0,test_data.shape[0]):
         for l in attr_vals['class']:
@@ -65,16 +67,22 @@ def predict(test_data,prob_of_feature_value_given_class,prob_of_class,attr_names
             predict_feature_set_given_class[l] = 1
         for j in attr_names[:-1]:
             for k in attr_vals['class']:
-                predict_feature_set_given_class[k] *= prob_of_feature_value_given_class[k][j][test_data[j].iloc[i]]
+                if test_data[j].iloc[i] in prob_of_feature_value_given_class[k][j]:
+                    predict_feature_set_given_class[k] *= prob_of_feature_value_given_class[k][j][test_data[j].iloc[i]]
+                else:
+                    predict_feature_set_given_class[k] *= 1/(train_data[train_data['class']==i].shape[0]+1+len(train_data[j].unique()))
         evidence = 0
         for n in attr_vals['class']: 
             evidence += predict_feature_set_given_class[n]*prob_of_class[n]            
         for m in attr_vals['class']:
             predict[m] = predict_feature_set_given_class[m]*prob_of_class[m]/evidence
         predictions += str (i+1) + " " + str(max(predict, key=predict.get)) + " " + str(test_data['class'].iloc[i]) + " " + str('{0:.12f}'.format(max(predict.values()))) + "\n"
+        total+=1
         if(max(predict, key=predict.get) == str(test_data['class'].iloc[i])):
             count += 1
     print(count)
+    naive_accuracy.append(count/total)
+    
     return predictions    
     
 
@@ -125,11 +133,13 @@ def prim(attr_names,attr_vals,train_data):
 
 
 def tan_predict(attr_names,attr_vals,train_data,test_data,bayesian_network):
-    tanprediction = ""
+    tanprediction = "***** TAN Predcitions ******* \n S.No  prediction  Actual  Probability \n"
+    global tan_accuracy
+    total = 0
     likelihood = {}
     tanpredict = {}
     prob_of_class = {}
-    count = 0
+    tan_count = 0
     data_freq = freq(train_data,attr_names,attr_vals)
     for o in attr_vals['class']:
         prob_of_class[o] = train_data[train_data['class']==o].shape[0]/train_data.shape[0]
@@ -140,13 +150,27 @@ def tan_predict(attr_names,attr_vals,train_data,test_data,bayesian_network):
         for j in attr_names[:-1]:
             for m in attr_vals['class']: 
                 if j == attr_names[0]:
-                    num = data_freq[m][j][test_data[j].iloc[i]]+1
-                    den = train_data[train_data['class']==m].shape[0] + 1 +len(train_data[j].unique())
-                    prob_feature_given_parent_and_class = num/den
+                    if test_data[j].iloc[i] in data_freq[m][j]: 
+                        num = data_freq[m][j][test_data[j].iloc[i]]+1
+                        den = train_data[train_data['class']==m].shape[0] + 1 +len(train_data[j].unique())
+                        prob_feature_given_parent_and_class = num/den
+                    else:
+                        prob_feature_given_parent_and_class = 1/(train_data[train_data['class']==m].shape[0] + 1 +len(train_data[j].unique()))
                 else:
-#                    num = data_freq[m][j][test_data[j].iloc[i]]+1
-                    num = train_data[(train_data[bayesian_network[j]]== test_data[bayesian_network[j]].iloc[i]) & (train_data[j]==test_data[j].iloc[i]) & (train_data['class']==m)].shape[0] + 1
-                    den = train_data[(train_data[bayesian_network[j]]== test_data[bayesian_network[j]].iloc[i]) & (train_data['class']==m)].shape[0] + 1 +len(train_data[j].unique())
+                    if (test_data[j].iloc[i] in data_freq[m][j]) and (test_data[bayesian_network[j]].iloc[i] in data_freq[m][bayesian_network[j]]):
+                        num = train_data[(train_data[bayesian_network[j]]== test_data[bayesian_network[j]].iloc[i]) & (train_data[j]==test_data[j].iloc[i]) & (train_data['class']==m)].shape[0] + 1
+                        den = train_data[(train_data[bayesian_network[j]]== test_data[bayesian_network[j]].iloc[i]) & (train_data['class']==m)].shape[0] + 1 +len(train_data[j].unique())
+                    else:
+                        if test_data[j].iloc[i] in data_freq[m][j]:
+                            num = data_freq[m][j][test_data[j].iloc[i]]+1
+                            den = train_data[train_data['class']==m].shape[0] + 1 +len(train_data[j].unique())
+                            prob_feature_given_parent_and_class = num/den
+                        elif test_data[bayesian_network[j]].iloc[i] in data_freq[m][bayesian_network[j]]:
+                            num = 1
+                            den = train_data[(train_data[bayesian_network[j]]== test_data[bayesian_network[j]].iloc[i]) & (train_data['class']==m)].shape[0] + 1 +len(train_data[j].unique())
+                        else:
+                            num = 1
+                            den = train_data[train_data['class']==m].shape[0] + 1 +len(train_data[j].unique())                            
                     prob_feature_given_parent_and_class = num /den
                 likelihood[m] *= prob_feature_given_parent_and_class
         evidence = 0
@@ -154,10 +178,12 @@ def tan_predict(attr_names,attr_vals,train_data,test_data,bayesian_network):
             evidence += likelihood[k]*prob_of_class[k]            
         for n in attr_vals['class']:
             tanpredict[n] = likelihood[n]*prob_of_class[n]/evidence
+        total+=1
         tanprediction += str (i+1) + " " + str(max(tanpredict, key=tanpredict.get)) + " " + str(test_data['class'].iloc[i]) + " " + str('{0:.12f}'.format(max(tanpredict.values()))) + "\n"
         if(max(tanpredict, key=tanpredict.get) == str(test_data['class'].iloc[i])):
-            count += 1
-    print(count)
+            tan_count += 1
+    print(tan_count)
+    tan_accuracy.append(tan_count/total)
     return tanprediction            
             
     
@@ -173,18 +199,78 @@ def tan(train_data,test_data):
 def naive(train_data,test_data):
     attr_names,attr_vals = summarize(train_data)
     prob_of_feature_value_given_class,prob_of_class = calculate_probs(train_data,attr_names,attr_vals)
-    predictions = predict(test_data,prob_of_feature_value_given_class,prob_of_class,attr_names,attr_vals)
+    predictions = predict(test_data,prob_of_feature_value_given_class,prob_of_class,attr_names,attr_vals,train_data)
     print(predictions)
+
+def comparison():
+    data = readdata("chess-KingRookVKingPawn.arff")
+    global naive_accuracy
+    global tan_accuracy
+    data=data.sample(frac=1).reset_index(drop=True)
+    attr_names,attr_vals = summarize(data)
+    data_first = data[data['class']==attr_vals['class'][0]]
+    data_second = data[data['class']==attr_vals['class'][1]]
+    test_data_size_first = data_first.shape[0]/10
+    test_data_size_second = data_second.shape[0]/10
+    for i in np.arange(0,10):
+        
+        if ((i+1)*test_data_size_first) <= data_first.shape[0]: 
+            test_data_first = data_first[int(i*test_data_size_first):int((i+1)*test_data_size_first)]
+            if i !=0:                
+                train_data_first = data_first[0:int(i*test_data_size_first)]
+                train_data_first.append(data_first[int(((i+1)*test_data_size_first)+1):])
+            else:
+                train_data_first = data_first[int(((i+1)*test_data_size_first)+1):]
+        else:
+            test_data_first = data_first[int(i*test_data_size_first):]
+            if i!=0:
+                train_data_first = data_first[0:int(i*test_data_size_first)]
+            
+        if ((i+1)*test_data_size_second) <= data_second.shape[0]: 
+            test_data_second = data_second[int(i*test_data_size_second):int((i+1)*test_data_size_second)]
+            if i !=0:
+                train_data_second = data_second[0:int(i*test_data_size_second)]
+                train_data_second.append(data_second[int(((i+1)*test_data_size_second)+1):])
+            else:
+                train_data_second = data_second[int(((i+1)*test_data_size_second)+1):]
+        else:
+            test_data_second = data_second[int(i*test_data_size_second):]
+            if i !=0:
+                train_data_second = data_second[0:int(i*test_data_size_second)]        
+
+        test_datas = [test_data_first,test_data_second]
+        test_data = pd.concat(test_datas)
+        train_datas = [train_data_first,train_data_second]
+        train_data = pd.concat(train_datas)
+        train_data=train_data.sample(frac=1).reset_index(drop=True)
+        test_data=test_data.sample(frac=1).reset_index(drop=True)
+        naive(train_data,test_data)
+        tan(train_data,test_data)
+    print(naive_accuracy)
+    print(tan_accuracy)
+   
 
 def main():
 #    train_data = str(sys.argv[1])
 #    test_data = str(sys.argv[2])
+#    n = str(sys.argv[3])
+    global naive_accuracy
+    naive_accuracy = []
+    global tan_accuracy
+    tan_accuracy = []
+    comparison()
+    n = "k"
     train_data = "lymph_train.arff"
     test_data =  "lymph_test.arff"
+    
     data_train = readdata(train_data)
     data_test = readdata(test_data)
-    naive(data_train,data_test)
-    tan(data_train,data_test)
+    if n == "n":
+        naive(data_train,data_test)
+    elif n=="t":
+        tan(data_train,data_test)
+    else:
+        print("Invalid option for model selection")
     
     
 main()
