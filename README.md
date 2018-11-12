@@ -1,1 +1,1 @@
-# Naive-Bayes-and-TAN
+# Naive-Bayes-and-Tree Augmented Naive Bayes
